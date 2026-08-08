@@ -1,26 +1,16 @@
-// Licensed under the Apache License, Version 2.0
-// Copyright 2025, Mindful Software LLC, All rights reserved.
+# otel_go_router example
 
-/// Runnable Flutter demo of `otel_go_router` against a local LGTM stack.
-///
-/// Run the stack:
-///   docker compose -f ../../../tool/lgtm/docker-compose.yml up -d
-///
-/// Then run this app on any Flutter device (web is easiest):
-///   flutter run -d chrome
-///
-/// Click the buttons in the UI to drive route transitions. Open
-/// Grafana (http://localhost:3000) → Explore → Tempo, search for
-/// service `go-router-otel-example-app` to see one trace per
-/// transition (push / pop / replace).
-library;
+A runnable three-screen Flutter demo of `otel_go_router`. Every
+button click drives a route transition; every transition emits one
+short span with `navigation.*` attributes to any OTLP-compatible
+backend (default endpoint `http://localhost:4318`).
+
+```dart
+// example/lib/main.dart
 
 import 'dart:io' show Platform;
 
-// Example apps use the Pro SDK to demonstrate the one-character
-// switch (OTel.initialize -> DOTel.initialize). The package source
-// still imports the OSS SDK directly so non-Pro users can use it.
-import 'package:dartastic_opentelemetry_pro/dartastic_opentelemetry_pro.dart';
+import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -32,19 +22,19 @@ const _defaultEndpoint = 'http://localhost:4318';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Platform.environment is unavailable on web — fall back to a const.
-  final endpoint = _readEndpoint();
-
-  await DOTel.initialize(
+  // OTel.initialize must run before the first OTelGoRouterObserver
+  // is constructed (the observer grabs its tracer eagerly).
+  await OTel.initialize(
     serviceName: _serviceName,
     serviceVersion: '0.0.1',
-    endpoint: endpoint,
+    endpoint: _readEndpoint(),
   );
 
-  runApp(const _DemoApp());
+  runApp(const DemoApp());
 }
 
 String _readEndpoint() {
+  // Platform.environment is unavailable on web — fall back to a const.
   if (kIsWeb) return _defaultEndpoint;
   return Platform.environment['OTEL_EXPORTER_OTLP_ENDPOINT'] ??
       _defaultEndpoint;
@@ -55,42 +45,39 @@ final _router = GoRouter(
   // other observers on the same Navigator.
   observers: [OTelGoRouterObserver()],
   routes: [
-    GoRoute(
-      path: '/',
-      builder: (_, __) => const _HomeScreen(),
-    ),
+    GoRoute(path: '/', builder: (_, __) => const HomeScreen()),
     GoRoute(
       path: '/orders',
-      builder: (_, __) => const _OrdersScreen(),
+      builder: (_, __) => const OrdersScreen(),
       routes: [
         GoRoute(
           path: ':orderId',
           builder: (_, s) =>
-              _OrderDetailScreen(id: s.pathParameters['orderId'] ?? '?'),
+              OrderDetailScreen(id: s.pathParameters['orderId'] ?? '?'),
         ),
       ],
     ),
     GoRoute(
       path: '/users/:id',
-      builder: (_, s) => _UserScreen(id: s.pathParameters['id'] ?? '?'),
+      builder: (_, s) => UserScreen(id: s.pathParameters['id'] ?? '?'),
     ),
   ],
 );
 
-class _DemoApp extends StatelessWidget {
-  const _DemoApp();
+class DemoApp extends StatelessWidget {
+  const DemoApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'go_router_otel demo',
+      title: 'otel_go_router demo',
       routerConfig: _router,
     );
   }
 }
 
-class _HomeScreen extends StatelessWidget {
-  const _HomeScreen();
+class HomeScreen extends StatelessWidget {
+  const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -121,8 +108,8 @@ class _HomeScreen extends StatelessWidget {
   }
 }
 
-class _OrdersScreen extends StatelessWidget {
-  const _OrdersScreen();
+class OrdersScreen extends StatelessWidget {
+  const OrdersScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -148,8 +135,8 @@ class _OrdersScreen extends StatelessWidget {
   }
 }
 
-class _OrderDetailScreen extends StatelessWidget {
-  const _OrderDetailScreen({required this.id});
+class OrderDetailScreen extends StatelessWidget {
+  const OrderDetailScreen({required this.id, super.key});
 
   final String id;
 
@@ -167,8 +154,8 @@ class _OrderDetailScreen extends StatelessWidget {
   }
 }
 
-class _UserScreen extends StatelessWidget {
-  const _UserScreen({required this.id});
+class UserScreen extends StatelessWidget {
+  const UserScreen({required this.id, super.key});
 
   final String id;
 
@@ -185,3 +172,33 @@ class _UserScreen extends StatelessWidget {
     );
   }
 }
+```
+
+## What each button emits
+
+| From | Button | Span(s) |
+|---|---|---|
+| `/` | "push /orders" | `route.push:/orders` |
+| `/` | "push /users/42" | `route.push:/users/:id` |
+| `/` | "go /orders/9001 (replace stack)" | `route.replace:/` + `route.push:/orders` + `route.push:/orders/:orderId` (varies by go_router version) |
+| `/orders` | "push /orders/9001" | `route.push:/orders/:orderId` |
+| any | "pop" | `route.pop:<path>` |
+
+Note the path placeholders (`:id`, `:orderId`) — `package:go_router`
+populates `Route.settings.name` with the matched *pattern*, not the
+resolved URL, so span names stay low-cardinality automatically.
+Other routers may need a `spanNameBuilder` override.
+
+Open any trace in your tracing backend to inspect the
+`navigation.*` attributes:
+
+- `navigation.action` (`push` / `pop` / `replace` / `remove`)
+- `navigation.route.path` (matched pattern, not resolved URL)
+- `navigation.previous_route_path`
+- `navigation.is_initial_route` (only on the very first push)
+
+## Env
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318` | OTLP HTTP endpoint (the SDK's default protocol). For gRPC, also set `OTEL_EXPORTER_OTLP_PROTOCOL=grpc` and point at port 4317. Web targets always use the default since `Platform.environment` is unavailable. |

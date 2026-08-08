@@ -5,16 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0-beta.1-wip]
+## [0.2.0-wip]
+
+### Changed
+
+- `GoRouterSemantics` now declares every `navigation.*` key it emits
+  locally — the upstream `NavigationSemantics` enum is not part of
+  any published `dartastic_opentelemetry_api` release, so the
+  package depends only on published API surface while keeping the
+  emitted keys byte-identical to the intended semconv.
+- README: documented wiring per go_router's route API — observers
+  must also be attached to each `ShellRoute` /
+  `StatefulShellBranch` navigator (a root-only observer is blind to
+  in-shell navigation), and `StatefulShellRoute` branch switches
+  fire no `NavigatorObserver` at all (emit from the `goBranch` call
+  site, or use `otel_auto_route` for tab-aware observation).
+- README made vendor-neutral (no backend product names).
+- Dependency floors raised to `dartastic_opentelemetry ^1.1.0-beta.12` and
+  `dartastic_opentelemetry_api ^1.0.0-rc.1`. The previous floors declared
+  compatibility with API versions that predate the semconv enums this
+  package uses and could not actually resolve-and-compile.
+- `repository` URL corrected to the canonical `Dartastic` org casing so
+  pub.dev repository verification succeeds.
 
 ### Added
 
 - `OTelGoRouterObserver` — a `NavigatorObserver` that emits one
   short span per navigation transition (`didPush` / `didPop` /
-  `didReplace` / `didRemove`). Carries the API's
-  `NavigationSemantics.navigationAction`, `routePath`, and
-  `previousRoutePath` attributes plus a local
+  `didReplace` / `didRemove`). Carries the package-local
+  `GoRouterSemantics` attribute keys (`navigation.action`,
+  `navigation.route.path`, `navigation.previous_route_path`) plus a
   `navigation.is_initial_route` flag for cold-start detection.
+  These `navigation.*` keys are SIG-proposal candidates, not
+  registry semconv — see the enum's docs.
 - Targets `go_router: ^17.0.0`. Works with any router that drives
   a Flutter `Navigator` — the observer is the standard
   `NavigatorObserver` API.
@@ -28,5 +51,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 6 widget tests with an in-memory exporter covering initial-route
   push, subsequent push + previous_route_path, pop, go(), custom
   span name builder, and the clipped-arguments path.
-- Flutter example app (`example_app/`) for visual proof against
-  the LGTM stack. Run with `flutter run -d chrome`.
+- Runnable Flutter example (`example/`) driving route transitions
+  against any local OTLP-compatible backend.

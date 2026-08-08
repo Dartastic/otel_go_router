@@ -5,8 +5,8 @@ OpenTelemetry instrumentation for [`package:go_router`](https://pub.dev/packages
 [Dartastic OpenTelemetry SDK](https://pub.dev/packages/dartastic_opentelemetry).
 
 Add one `NavigatorObserver` and every route transition emits a
-short span with `navigation.*` semconv attributes, turning your
-Tempo trace view into a user-journey timeline.
+short span with `navigation.*` attributes, turning your tracing
+backend's trace view into a user-journey timeline.
 
 ```dart
 final router = GoRouter(
@@ -31,7 +31,8 @@ MVP does NOT do — see Caveats), having one event span per route
 transition gives you:
 
 - A timeline of how the user moved through the app, queryable in
-  Tempo by `navigation.route.path` / `navigation.action`.
+  your tracing backend by `navigation.route.path` /
+  `navigation.action`.
 - A correlation handle (transition timestamp) for joining navigation
   events with other telemetry.
 - A foundation for proposing a `navigation.*` semantic convention
@@ -63,8 +64,50 @@ package with go_router.
 
 With other routers (vanilla `Navigator.push`, `auto_route`, …)
 `settings.name` is whatever the caller passed. If you see
-high-cardinality names like `/users/42` in Tempo, override
+high-cardinality span names like `/users/42`, override
 `spanNameBuilder` to strip dynamic segments.
+
+## Wiring per go_router's route API
+
+`GoRouter(observers: ...)` attaches the observer to the **root**
+navigator only. go_router builds a *separate* navigator for every
+`ShellRoute` / `StatefulShellBranch`, and a `NavigatorObserver` only
+sees the navigator it is attached to — so navigation *inside* a
+shell is invisible to a root-only observer. Attach an observer at
+each level you want observed:
+
+```dart
+final router = GoRouter(
+  observers: [OTelGoRouterObserver()], // root navigator
+  routes: [
+    ShellRoute(
+      observers: [OTelGoRouterObserver()], // this shell's navigator
+      builder: ...,
+      routes: [...],
+    ),
+    StatefulShellRoute.indexedStack(
+      branches: [
+        StatefulShellBranch(
+          observers: [OTelGoRouterObserver()], // per-branch navigator
+          routes: [...],
+        ),
+        ...
+      ],
+      builder: ...,
+    ),
+  ],
+);
+```
+
+New instances per navigator are fine — they all emit through the
+same tracer. One caveat has no observer-based fix: switching the
+*active branch* of a `StatefulShellRoute` (tab-style navigation)
+does not push or pop any route on any navigator, so no
+`NavigatorObserver` fires. If tab switches must be recorded, emit a
+span from your shell's branch-change callback (the
+`navigationShell.goBranch` call site) — or, for `auto_route` apps,
+use [`otel_auto_route`](https://pub.dev/packages/otel_auto_route),
+whose `AutoRouterObserver` receives tab events natively.
 
 ## Configuration
 

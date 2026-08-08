@@ -12,7 +12,7 @@ import 'navigation_semantics.dart';
 /// A `NavigatorObserver` that emits one short span per navigation
 /// transition (`didPush` / `didPop` / `didReplace` / `didRemove`).
 /// Each span carries the resolved route path and the transition
-/// type, so a Tempo waterfall reads as a user-journey trace.
+/// type, so a trace waterfall reads as a user journey.
 ///
 /// Install in `GoRouter`:
 ///
@@ -69,8 +69,7 @@ final class OTelGoRouterObserver extends NavigatorObserver {
     String Function(String transition, Route<dynamic> route)? spanNameBuilder,
     this.recordArguments = false,
     this.argumentAttributeMaxLength = 256,
-  })  : _tracer = tracer ??
-            OTel.tracerProvider().getTracer('otel_go_router'),
+  })  : _tracer = tracer ?? OTel.tracerProvider().getTracer('otel_go_router'),
         _spanNameBuilder = spanNameBuilder ?? _defaultSpanName;
 
   final Tracer _tracer;
@@ -129,17 +128,17 @@ final class OTelGoRouterObserver extends NavigatorObserver {
     bool isInitial = false,
   }) {
     final attrs = <String, Object>{
-      NavigationSemantics.navigationAction.key: transition,
+      GoRouterSemantics.navigationAction.key: transition,
     };
 
     final path = route.settings.name;
     if (path != null) {
-      attrs[NavigationSemantics.routePath.key] = path;
+      attrs[GoRouterSemantics.routePath.key] = path;
     }
 
     final prevPath = previousRoute?.settings.name;
     if (prevPath != null) {
-      attrs[NavigationSemantics.previousRoutePath.key] = prevPath;
+      attrs[GoRouterSemantics.previousRoutePath.key] = prevPath;
     }
 
     if (isInitial) {
@@ -149,7 +148,7 @@ final class OTelGoRouterObserver extends NavigatorObserver {
     if (recordArguments) {
       final args = route.settings.arguments;
       if (args != null) {
-        attrs[NavigationSemantics.routeArguments.key] = _clip(args.toString());
+        attrs[GoRouterSemantics.routeArguments.key] = _clip(args.toString());
       }
     }
 
