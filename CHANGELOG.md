@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.0-wip]
 
+### Changed
+
+- Widened the `go_router` constraint from `^17.0.0` to
+  `>=17.0.0 <19.0.0`. `go_router` 18.0.0's only breaking changes are
+  the migration to `material_ui` / `cupertino_ui` and a raised SDK
+  floor (Flutter 3.44 / Dart 3.12) — neither touches the
+  `NavigatorObserver` / `Route` / `RouteSettings` surface this
+  package is built on. `lib/` imports only
+  `package:flutter/widgets.dart`; `go_router` appears solely in the
+  tests and the example. Apps already on `go_router` 18 could not
+  depend on this package at all.
+
 ## [0.2.0] - 2026-08-10
 
 ### Changed
