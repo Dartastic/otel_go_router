@@ -5,6 +5,9 @@ import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart';
 import 'package:flutter/widgets.dart';
 
 import 'navigation_semantics.dart';
+import 'otel_guard.dart';
+
+const _tracerName = 'otel_go_router';
 
 /// OpenTelemetry instrumentation for `package:go_router` (and any
 /// other Flutter router that drives a `Navigator`).
@@ -56,7 +59,9 @@ final class OTelGoRouterObserver extends NavigatorObserver {
   /// Creates an observer.
   ///
   /// - [tracer] — defaults to
-  ///   `OTel.tracerProvider().getTracer('otel_go_router')`.
+  ///   `OTel.tracerProvider().getTracer('otel_go_router')`, resolved
+  ///   lazily on the first navigation so that constructing the observer
+  ///   never depends on `OTel.initialize()` having run.
   /// - [spanNameBuilder] — overrides the default span name. Useful
   ///   for substituting `/orders/42` → `/orders/:id`.
   /// - [recordArguments] — when `true`, also record
@@ -69,12 +74,26 @@ final class OTelGoRouterObserver extends NavigatorObserver {
     String Function(String transition, Route<dynamic> route)? spanNameBuilder,
     this.recordArguments = false,
     this.argumentAttributeMaxLength = 256,
-  })  : _tracer = tracer ?? OTel.tracerProvider().getTracer('otel_go_router'),
+  })  : _explicitTracer = tracer,
         _spanNameBuilder = spanNameBuilder ?? _defaultSpanName;
 
-  final Tracer _tracer;
+  final Tracer? _explicitTracer;
+  Tracer? _cachedTracer;
   final String Function(String transition, Route<dynamic> route)
       _spanNameBuilder;
+
+  /// The tracer to emit on, or `null` while the OTel SDK is not
+  /// initialized.
+  ///
+  /// Resolved lazily and cached: the observer is normally constructed
+  /// where the `GoRouter` / `MaterialApp` is built, which can run
+  /// before — or entirely without — a successful `OTel.initialize()`.
+  /// Navigation must never depend on telemetry being up.
+  Tracer? get _tracer =>
+      _explicitTracer ??
+      (_cachedTracer ??= tryTelemetry(
+        () => OTel.tracerProvider().getTracer(_tracerName),
+      ));
 
   /// When `true`, records `Route.settings.arguments.toString()`.
   final bool recordArguments;
@@ -127,6 +146,26 @@ final class OTelGoRouterObserver extends NavigatorObserver {
     required Route<dynamic>? previousRoute,
     bool isInitial = false,
   }) {
+    tryTelemetryEffect(() {
+      final tracer = _tracer;
+      if (tracer == null) return;
+      _emitOn(
+        tracer,
+        transition: transition,
+        route: route,
+        previousRoute: previousRoute,
+        isInitial: isInitial,
+      );
+    });
+  }
+
+  void _emitOn(
+    Tracer tracer, {
+    required String transition,
+    required Route<dynamic> route,
+    required Route<dynamic>? previousRoute,
+    required bool isInitial,
+  }) {
     final attrs = <String, Object>{
       GoRouterSemantics.navigationAction.key: transition,
     };
@@ -152,11 +191,12 @@ final class OTelGoRouterObserver extends NavigatorObserver {
       }
     }
 
-    final span = _tracer.startSpan(
-      _spanNameBuilder(transition, route),
-      attributes: OTel.attributesFromMap(attrs),
-    );
-    span.end();
+    tracer
+        .startSpan(
+          _spanNameBuilder(transition, route),
+          attributes: OTel.attributesFromMap(attrs),
+        )
+        .end();
   }
 
   String _clip(String s) {

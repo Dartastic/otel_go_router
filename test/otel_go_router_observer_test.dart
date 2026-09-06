@@ -210,4 +210,40 @@ void main() {
       expect(arg.length, equals(6)); // 5 + ellipsis
     });
   });
+
+  // Regression: instrumentation must never be in the functional path.
+  // Before the lazy tracer, the constructor itself threw
+  // `StateError: OTel.initialize() must be called first.`, so building
+  // the router / MaterialApp that carries the observer failed outright.
+  group('OTel SDK not initialized', () {
+    setUp(() async {
+      await OTel.reset();
+    });
+
+    testWidgets('the observer can be constructed', (tester) async {
+      expect(OTelGoRouterObserver.new, returnsNormally);
+    });
+
+    testWidgets('navigation still works', (tester) async {
+      final navKey = GlobalKey<NavigatorState>();
+      await tester.pumpWidget(MaterialApp(
+        navigatorKey: navKey,
+        navigatorObservers: [OTelGoRouterObserver()],
+        home: const Text('home'),
+      ));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      unawaited(navKey.currentState!.push(
+        MaterialPageRoute<void>(
+          settings: const RouteSettings(name: '/next'),
+          builder: (_) => const Text('next'),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('next'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
 }
