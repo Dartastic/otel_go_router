@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.0-wip]
 
+### Fixed
+
+- `OTelGoRouterObserver` no longer requires `OTel.initialize()` to have
+  run before it is constructed. The default tracer is resolved lazily on
+  the first navigation and `_emit` is guarded, so building the
+  `GoRouter` / `MaterialApp` that carries the observer — and navigating
+  — never depends on telemetry being up. Previously the constructor
+  threw `StateError: OTel.initialize() must be called first.`
+
 ## [0.2.0] - 2026-08-10
 
 ### Changed
