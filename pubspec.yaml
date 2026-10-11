@@ -3,7 +3,7 @@ description: >-
   OpenTelemetry instrumentation for `package:go_router`. A NavigatorObserver
   that emits a span per route transition with navigation.* attributes - the
   anchor for user-journey traces.
-version: 1.0.0-wip
+version: 0.3.0-wip
 repository: https://github.com/dartastic/otel_go_router
 homepage: https://dartastic.io
 
@@ -12,7 +12,6 @@ environment:
   flutter: ">=3.10.0"
 
 dependencies:
-  dartastic_opentelemetry: ^1.1.0-beta.17
   dartastic_opentelemetry_api: '>=1.0.0-rc.4 <1.0.0-rc.5'
   flutter:
     sdk: flutter
@@ -20,6 +19,7 @@ dependencies:
 
 dev_dependencies:
   dart_flutter_team_lints: ^3.5.2
+  dartastic_opentelemetry: ^1.1.0-beta.17
   flutter_test:
     sdk: flutter
   pub_semver: ^2.0.0
