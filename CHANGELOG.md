@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Requires `dartastic_opentelemetry_api >=1.0.0-rc.4 <1.0.0-rc.5`.
+- Supports `go_router` 18 (`>=17.0.0 <19.0.0`).
 - **Breaking:** depends on `dartastic_opentelemetry_api` only, no
   longer on the SDK. The application chooses and initializes the
   OpenTelemetry SDK. Parameters and fields typed with SDK classes
